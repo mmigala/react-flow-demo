@@ -1,5 +1,6 @@
 import type { Edge } from '@xyflow/react';
 import type { NodeKind, WorkflowNode } from '../types';
+import { getSubtype } from './nodeCatalog';
 
 // Only these kind -> kind transitions are allowed to be connected.
 // This enforces: Trigger -> Input -> Action(s) -> Output
@@ -24,6 +25,19 @@ export function isTransitionAllowed(sourceKind: NodeKind, targetKind: NodeKind):
   return ALLOWED_TRANSITIONS[sourceKind].includes(targetKind);
 }
 
+/**
+ * A connection is only allowed when the two nodes' kinds follow the required order
+ * AND the upstream node's produced data type matches the downstream node's required
+ * data type (like matching plug shapes) - e.g. a node that produces "Order" data can
+ * only feed a node that accepts "Order" data.
+ */
+export function isConnectionAllowed(source: WorkflowNode, target: WorkflowNode): boolean {
+  if (!isTransitionAllowed(source.data.kind, target.data.kind)) return false;
+  const sourceSubtype = getSubtype(source.data.subtypeId);
+  const targetSubtype = getSubtype(target.data.subtypeId);
+  return sourceSubtype.produces !== undefined && sourceSubtype.produces === targetSubtype.accepts;
+}
+
 export interface ValidationResult {
   valid: boolean;
   errors: string[];
@@ -34,7 +48,7 @@ export interface ValidationResult {
  * - exactly one trigger / input / output node
  * - every node has at most one outgoing and one incoming edge (linear chain, no branching)
  * - following edges from trigger visits every node exactly once and ends at output,
- *   respecting the Trigger -> Input -> Action(s) -> Output order.
+ *   respecting the Trigger -> Input -> Action(s) -> Output order and matching data types.
  */
 export function validateWorkflow(nodes: WorkflowNode[], edges: Edge[]): ValidationResult {
   const errors: string[] = [];
@@ -89,8 +103,12 @@ export function validateWorkflow(nodes: WorkflowNode[], edges: Edge[]): Validati
     }
     const nextNode: WorkflowNode | undefined = nodes.find((n) => n.id === nextEdge.target);
     if (!nextNode) break;
-    if (!isTransitionAllowed(current.data.kind, nextNode.data.kind)) {
-      errors.push(`Connection from "${current.data.label}" to "${nextNode.data.label}" is not allowed.`);
+    if (!isConnectionAllowed(current, nextNode)) {
+      const currentSubtype = getSubtype(current.data.subtypeId);
+      const nextSubtype = getSubtype(nextNode.data.subtypeId);
+      errors.push(
+        `Connection from "${current.data.label}" (produces ${currentSubtype.produces ?? 'nothing'}) to "${nextNode.data.label}" (needs ${nextSubtype.accepts ?? 'nothing'}) is not allowed - data types don't match.`,
+      );
       break;
     }
     current = nextNode;
@@ -103,3 +121,4 @@ export function validateWorkflow(nodes: WorkflowNode[], edges: Edge[]): Validati
 
   return { valid: errors.length === 0, errors };
 }
+

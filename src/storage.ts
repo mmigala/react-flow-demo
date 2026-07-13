@@ -21,18 +21,20 @@ function seedAndPersist(): WorkflowDefinition[] {
   const seed: WorkflowDefinition[] = [
     {
       id: 'sample-1',
-      name: 'New user onboarding',
+      name: 'Order to payment',
       updatedAt: new Date().toISOString(),
       nodes: [
-        { id: 'trigger-1', type: 'flowNode', position: { x: 0, y: 100 }, data: { label: 'User signed up', kind: 'trigger' } },
-        { id: 'input-1', type: 'flowNode', position: { x: 220, y: 100 }, data: { label: 'Read user profile', kind: 'input' } },
-        { id: 'action-1', type: 'flowNode', position: { x: 440, y: 100 }, data: { label: 'Send welcome email', kind: 'action' } },
-        { id: 'output-1', type: 'flowNode', position: { x: 660, y: 100 }, data: { label: 'Mark onboarding complete', kind: 'output' } },
+        { id: 'trigger-1', type: 'flowNode', position: { x: 0, y: 100 }, data: { label: 'Order Placed', kind: 'trigger', subtypeId: 'order-placed' } },
+        { id: 'input-1', type: 'flowNode', position: { x: 260, y: 100 }, data: { label: 'Load Order Details', kind: 'input', subtypeId: 'load-order' } },
+        { id: 'action-1', type: 'flowNode', position: { x: 520, y: 100 }, data: { label: 'Apply Discount', kind: 'action', subtypeId: 'apply-discount' } },
+        { id: 'action-2', type: 'flowNode', position: { x: 780, y: 100 }, data: { label: 'Charge Card', kind: 'action', subtypeId: 'charge-card' } },
+        { id: 'output-1', type: 'flowNode', position: { x: 1040, y: 100 }, data: { label: 'Confirm Payment', kind: 'output', subtypeId: 'confirm-payment' } },
       ],
       edges: [
         { id: 'e1', source: 'trigger-1', target: 'input-1' },
         { id: 'e2', source: 'input-1', target: 'action-1' },
-        { id: 'e3', source: 'action-1', target: 'output-1' },
+        { id: 'e3', source: 'action-1', target: 'action-2' },
+        { id: 'e4', source: 'action-2', target: 'output-1' },
       ],
     },
   ];
