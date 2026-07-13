@@ -1,4 +1,5 @@
-import type { WorkflowDefinition } from './types';
+import { getEnableReadiness } from './flow/nodeRules';
+import type { WorkflowDefinition, WorkflowStatus } from './types';
 
 // Mocked "backend" - everything lives in localStorage so the demo works FE-only.
 const STORAGE_KEY = 'reactflow-demo.workflows';
@@ -22,6 +23,7 @@ function seedAndPersist(): WorkflowDefinition[] {
     {
       id: 'sample-1',
       name: 'Order to payment',
+      status: 'disabled',
       updatedAt: new Date().toISOString(),
       nodes: [
         { id: 'trigger-1', type: 'flowNode', position: { x: 0, y: 100 }, data: { label: 'Order Placed', kind: 'trigger', subtypeId: 'order-placed' } },
@@ -64,4 +66,24 @@ export function saveWorkflow(workflow: WorkflowDefinition): void {
 
 export function deleteWorkflow(id: string): void {
   writeAll(readAll().filter((w) => w.id !== id));
+}
+
+/**
+ * Flips a workflow's status. Enabling is rejected (with the missing checklist items) unless
+ * it has at least one Trigger/Input/Action/Output all connected together; disabling is always allowed.
+ */
+export function setWorkflowStatus(id: string, status: WorkflowStatus): { ok: boolean; errors: string[] } {
+  const all = readAll();
+  const workflow = all.find((w) => w.id === id);
+  if (!workflow) return { ok: false, errors: ['Workflow not found.'] };
+
+  if (status === 'enabled') {
+    const readiness = getEnableReadiness(workflow.nodes, workflow.edges);
+    if (!readiness.ready) {
+      return { ok: false, errors: readiness.checks.filter((c) => !c.done).map((c) => `Missing: ${c.label}`) };
+    }
+  }
+
+  saveWorkflow({ ...workflow, status });
+  return { ok: true, errors: [] };
 }

@@ -1,6 +1,6 @@
 import type { Edge } from '@xyflow/react';
 import type { NodeKind, WorkflowNode } from '../types';
-import { getSubtype } from './nodeCatalog';
+import { getSubtype, type DataType } from './nodeCatalog';
 
 // Only these kind -> kind transitions are allowed to be connected.
 // This enforces: Trigger -> Input -> Action(s) -> Output
@@ -120,5 +120,62 @@ export function validateWorkflow(nodes: WorkflowNode[], edges: Edge[]): Validati
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Walks the connected chain starting at the Trigger and returns the data type the *next*
+ * node would need to accept - i.e. the `produces` type of whatever is currently at the end
+ * of the wired-up path. Returns undefined when there's no Trigger yet (nothing to compare
+ * against), so callers know not to filter anything in that case.
+ */
+export function getChainTailType(nodes: WorkflowNode[], edges: Edge[]): DataType | undefined {
+  const trigger = nodes.find((n) => n.data.kind === 'trigger');
+  if (!trigger) return undefined;
+
+  const outMap = new Map<string, Edge>();
+  for (const edge of edges) {
+    if (!outMap.has(edge.source)) outMap.set(edge.source, edge);
+  }
+
+  const visited = new Set<string>();
+  let tail = trigger;
+  while (!visited.has(tail.id)) {
+    visited.add(tail.id);
+    const nextEdge = outMap.get(tail.id);
+    const nextNode = nextEdge ? nodes.find((n) => n.id === nextEdge.target) : undefined;
+    if (!nextNode) break;
+    tail = nextNode;
+  }
+
+  return getSubtype(tail.data.subtypeId).produces;
+}
+
+export interface ReadinessCheck {
+  label: string;
+  done: boolean;
+}
+
+export interface EnableReadiness {
+  ready: boolean;
+  checks: ReadinessCheck[];
+}
+
+/**
+ * What's required to flip a workflow from Disabled to Enabled: at least one of each
+ * Trigger/Input/Action/Output, all wired together in the required order. This is stricter
+ * than validateWorkflow (which allows a workflow with zero actions to be saved as a draft).
+ * Returned as a checklist so the UI can show users exactly what's missing.
+ */
+export function getEnableReadiness(nodes: WorkflowNode[], edges: Edge[]): EnableReadiness {
+  const count = (kind: NodeKind) => nodes.filter((n) => n.data.kind === kind).length;
+  const structural = validateWorkflow(nodes, edges);
+  const checks: ReadinessCheck[] = [
+    { label: 'At least one Trigger', done: count('trigger') === 1 },
+    { label: 'At least one Input', done: count('input') === 1 },
+    { label: 'At least one Action', done: count('action') >= 1 },
+    { label: 'At least one Output', done: count('output') === 1 },
+    { label: 'All nodes connected in a valid Trigger \u2192 Input \u2192 Action(s) \u2192 Output chain', done: structural.valid },
+  ];
+  return { ready: checks.every((c) => c.done), checks };
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ReactFlow,
@@ -16,7 +16,7 @@ import {
 import { getWorkflow, saveWorkflow } from '../storage';
 import { FlowNode } from '../flow/FlowNode';
 import { DeletableEdge } from '../flow/DeletableEdge';
-import { KIND_META, SINGLETON_KINDS, isConnectionAllowed, validateWorkflow } from '../flow/nodeRules';
+import { KIND_META, SINGLETON_KINDS, getChainTailType, getEnableReadiness, isConnectionAllowed } from '../flow/nodeRules';
 import { DATA_TYPE_COLORS, getSubtype, subtypesForKind, type NodeSubtype } from '../flow/nodeCatalog';
 import type { NodeKind, WorkflowNode } from '../types';
 
@@ -34,11 +34,22 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
   const navigate = useNavigate();
   const existing = useMemo(() => getWorkflow(workflowId), [workflowId]);
 
+  // Enabled workflows are locked - guard direct URL access too, not just the list page's Edit button.
+  useEffect(() => {
+    if (existing?.status === 'enabled') {
+      navigate('/');
+    }
+  }, [existing, navigate]);
+
   const [name, setName] = useState(existing?.name ?? 'Untitled workflow');
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>(existing?.nodes ?? []);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(existing?.edges ?? []);
   const [errors, setErrors] = useState<string[]>([]);
   const [connecting, setConnecting] = useState<ConnectingHandle | null>(null);
+  const readiness = useMemo(() => getEnableReadiness(nodes, edges), [nodes, edges]);
+  // The data type the next Input/Action/Output must accept, based on whatever is already
+  // wired up on the board - used to keep incompatible catalog options out of the dropdowns.
+  const chainTailType = useMemo(() => getChainTailType(nodes, edges), [nodes, edges]);
 
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {
@@ -94,17 +105,27 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
     setNodes((nds) => [...nds, newNode]);
   };
 
+  // Saving never blocks on validity - while Disabled, a workflow can be edited into any
+  // (even incomplete) shape. Only flipping it to Enabled requires the full checklist below.
   const handleSave = () => {
     if (!name.trim()) {
       setErrors(['Workflow name is required.']);
       return;
     }
-    const result = validateWorkflow(nodes, edges);
-    if (!result.valid) {
-      setErrors(result.errors);
+    saveWorkflow({ id: workflowId, name: name.trim(), status: 'disabled', nodes, edges, updatedAt: new Date().toISOString() });
+    navigate('/');
+  };
+
+  const handleEnable = () => {
+    if (!name.trim()) {
+      setErrors(['Workflow name is required.']);
       return;
     }
-    saveWorkflow({ id: workflowId, name: name.trim(), nodes, edges, updatedAt: new Date().toISOString() });
+    if (!readiness.ready) {
+      setErrors(readiness.checks.filter((c) => !c.done).map((c) => `Missing: ${c.label}`));
+      return;
+    }
+    saveWorkflow({ id: workflowId, name: name.trim(), status: 'enabled', nodes, edges, updatedAt: new Date().toISOString() });
     navigate('/');
   };
 
@@ -116,19 +137,39 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
           <button className="btn" onClick={() => navigate('/')}>
             Cancel
           </button>
-          <button className="btn btn-primary" onClick={handleSave}>
+          <button className="btn" onClick={handleSave}>
             Save
           </button>
+          <button
+            className="btn btn-primary"
+            disabled={!readiness.ready}
+            title={readiness.ready ? 'Save and enable this workflow' : 'Complete the checklist below to enable'}
+            onClick={handleEnable}
+          >
+            Save &amp; Enable
+          </button>
         </div>
+      </div>
+
+      <div className="readiness">
+        <strong>Ready to enable?</strong> A workflow can only run once it has all of these:
+        <ul>
+          {readiness.checks.map((check) => (
+            <li key={check.label} className={check.done ? 'check-ok' : 'check-missing'}>
+              {check.done ? '✓' : '✗'} {check.label}
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="legend">
         Required order: <strong>Trigger → Input → Action(s) → Output</strong>. Trigger, Input and Output are required
         exactly once each; Actions are optional and repeatable. Nodes only connect when their data types match too -
-        each node needs/gives one of the types below, like plugging matching cable shapes together. Double-click a
-        node to rename it, drag from a right (output) handle to a left (input) handle to connect - compatible nodes
-        light up green while you drag - use a node's × button to delete it, and click the × on a connection line to
-        disconnect it.
+        each node needs/gives one of the types below, like plugging matching cable shapes together - the dropdowns
+        below automatically grey out node types that wouldn't fit what's already on the board. Double-click a node to
+        rename it, drag from a right (output) handle to a left (input) handle to connect - compatible nodes light up
+        green while you drag - use a node's × button to delete it, and click the × on a connection line to disconnect
+        it.
         <div className="type-legend">
           {Object.entries(DATA_TYPE_COLORS).map(([type, color]) => (
             <span key={type} className="type-chip" style={{ background: color }}>
@@ -162,13 +203,17 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
                 <option value="" disabled>
                   + Add {KIND_META[kind].label}...
                 </option>
-                {subtypesForKind(kind).map((subtype) => (
-                  <option key={subtype.id} value={subtype.id}>
-                    {subtype.label}
-                    {subtype.accepts ? ` (needs ${subtype.accepts})` : ''}
-                    {subtype.produces ? ` → gives ${subtype.produces}` : ''}
-                  </option>
-                ))}
+                {subtypesForKind(kind).map((subtype) => {
+                  const incompatible = chainTailType !== undefined && subtype.accepts !== undefined && subtype.accepts !== chainTailType;
+                  return (
+                    <option key={subtype.id} value={subtype.id} disabled={incompatible}>
+                      {subtype.label}
+                      {subtype.accepts ? ` (needs ${subtype.accepts})` : ''}
+                      {subtype.produces ? ` → gives ${subtype.produces}` : ''}
+                      {incompatible ? ` — board currently gives ${chainTailType}` : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
           );
