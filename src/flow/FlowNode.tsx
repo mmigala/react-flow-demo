@@ -1,0 +1,61 @@
+import { useState } from 'react';
+import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
+import { KIND_META } from './nodeRules';
+import type { WorkflowNode } from '../types';
+
+export function FlowNode({ id, data, selected }: NodeProps<WorkflowNode>) {
+  const { setNodes, deleteElements } = useReactFlow();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(data.label);
+  const meta = KIND_META[data.kind];
+
+  const commitRename = () => {
+    const nextLabel = draft.trim() || data.label;
+    setNodes((nodes) => nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, label: nextLabel } } : n)));
+    setEditing(false);
+  };
+
+  return (
+    <div
+      className="flow-node"
+      style={{ borderColor: meta.color, boxShadow: selected ? `0 0 0 2px ${meta.color}` : undefined }}
+      onDoubleClick={() => setEditing(true)}
+      title="Double-click to rename"
+    >
+      {data.kind !== 'trigger' && <Handle type="target" position={Position.Left} />}
+
+      <div className="flow-node-badge" style={{ background: meta.color }}>
+        {meta.label}
+      </div>
+
+      {editing ? (
+        <input
+          className="flow-node-input"
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitRename();
+            if (e.key === 'Escape') {
+              setDraft(data.label);
+              setEditing(false);
+            }
+          }}
+        />
+      ) : (
+        <div className="flow-node-label">{data.label}</div>
+      )}
+
+      <button
+        className="flow-node-delete"
+        title="Delete node"
+        onClick={() => deleteElements({ nodes: [{ id }] })}
+      >
+        ×
+      </button>
+
+      {data.kind !== 'output' && <Handle type="source" position={Position.Right} />}
+    </div>
+  );
+}
