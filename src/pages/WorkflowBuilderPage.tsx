@@ -99,7 +99,7 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
     const newNode: WorkflowNode = {
       id,
       type: 'flowNode',
-      position: { x: 60 + (count % 4) * 260, y: 80 + Math.floor(count / 4) * 160 },
+      position: { x: 80 + Math.floor(count / 6) * 240, y: 60 + (count % 6) * 150 },
       data: { label: subtype.label, kind: subtype.kind, subtypeId: subtype.id },
     };
     setNodes((nds) => [...nds, newNode]);
@@ -167,7 +167,7 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
         exactly once each; Actions are optional and repeatable. Nodes only connect when their data types match too -
         each node needs/gives one of the types below, like plugging matching cable shapes together - the dropdowns
         below automatically grey out node types that wouldn't fit what's already on the board. Double-click a node to
-        rename it, drag from a right (output) handle to a left (input) handle to connect - compatible nodes light up
+        rename it, drag from a bottom (output) handle to a top (input) handle to connect - compatible nodes light up
         green while you drag - use a node's × button to delete it, and click the × on a connection line to disconnect
         it.
         <div className="type-legend">

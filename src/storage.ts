@@ -26,11 +26,11 @@ function seedAndPersist(): WorkflowDefinition[] {
       status: 'disabled',
       updatedAt: new Date().toISOString(),
       nodes: [
-        { id: 'trigger-1', type: 'flowNode', position: { x: 0, y: 100 }, data: { label: 'Order Placed', kind: 'trigger', subtypeId: 'order-placed' } },
-        { id: 'input-1', type: 'flowNode', position: { x: 260, y: 100 }, data: { label: 'Load Order Details', kind: 'input', subtypeId: 'load-order' } },
-        { id: 'action-1', type: 'flowNode', position: { x: 520, y: 100 }, data: { label: 'Apply Discount', kind: 'action', subtypeId: 'apply-discount' } },
-        { id: 'action-2', type: 'flowNode', position: { x: 780, y: 100 }, data: { label: 'Charge Card', kind: 'action', subtypeId: 'charge-card' } },
-        { id: 'output-1', type: 'flowNode', position: { x: 1040, y: 100 }, data: { label: 'Confirm Payment', kind: 'output', subtypeId: 'confirm-payment' } },
+        { id: 'trigger-1', type: 'flowNode', position: { x: 0, y: 0 }, data: { label: 'Order Placed', kind: 'trigger', subtypeId: 'order-placed' } },
+        { id: 'input-1', type: 'flowNode', position: { x: 0, y: 150 }, data: { label: 'Load Order Details', kind: 'input', subtypeId: 'load-order' } },
+        { id: 'action-1', type: 'flowNode', position: { x: 0, y: 300 }, data: { label: 'Apply Discount', kind: 'action', subtypeId: 'apply-discount' } },
+        { id: 'action-2', type: 'flowNode', position: { x: 0, y: 450 }, data: { label: 'Charge Card', kind: 'action', subtypeId: 'charge-card' } },
+        { id: 'output-1', type: 'flowNode', position: { x: 0, y: 600 }, data: { label: 'Confirm Payment', kind: 'output', subtypeId: 'confirm-payment' } },
       ],
       edges: [
         { id: 'e1', source: 'trigger-1', target: 'input-1' },

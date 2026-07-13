@@ -27,7 +27,7 @@ export function FlowNode({ id, data, selected }: NodeProps<WorkflowNode>) {
       {subtype.accepts && (
         <Handle
           type="target"
-          position={Position.Left}
+          position={Position.Top}
           style={{ background: DATA_TYPE_COLORS[subtype.accepts] }}
           title={`Needs: ${subtype.accepts}`}
         />
@@ -80,7 +80,7 @@ export function FlowNode({ id, data, selected }: NodeProps<WorkflowNode>) {
       {subtype.produces && (
         <Handle
           type="source"
-          position={Position.Right}
+          position={Position.Bottom}
           style={{ background: DATA_TYPE_COLORS[subtype.produces] }}
           title={`Produces: ${subtype.produces}`}
         />
