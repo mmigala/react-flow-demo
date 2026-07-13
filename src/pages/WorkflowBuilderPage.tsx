@@ -18,6 +18,7 @@ import { FlowNode } from '../flow/FlowNode';
 import { DeletableEdge } from '../flow/DeletableEdge';
 import { KIND_META, SINGLETON_KINDS, getEnableReadiness, isConnectionAllowed } from '../flow/nodeRules';
 import { getIncompatibleWith, getSubtype, getValidNextSubtypeIds, subtypesForKind, type NodeSubtype } from '../flow/nodeCatalog';
+import { generateWorkflowFromPrompt, type GeneratedWorkflow } from '../ai/generateWorkflow';
 import type { NodeKind, WorkflowNode } from '../types';
 
 const nodeTypes = { flowNode: FlowNode };
@@ -48,6 +49,11 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
   const [connecting, setConnecting] = useState<ConnectingHandle | null>(null);
   const [infoOpenKind, setInfoOpenKind] = useState<NodeKind | null>(null);
   const infoPopoverRef = useRef<HTMLDivElement | null>(null);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
+  const [generatorPrompt, setGeneratorPrompt] = useState('');
+  const [generatorLoading, setGeneratorLoading] = useState(false);
+  const [generatorError, setGeneratorError] = useState<string | null>(null);
+  const [generatorPreview, setGeneratorPreview] = useState<GeneratedWorkflow | null>(null);
   const readiness = useMemo(() => getEnableReadiness(nodes, edges), [nodes, edges]);
   // Which subtype ids are currently allowed to be added next, mirroring
   // NodeCompatibilityPolicy.GetValidNextNodes - used to keep incompatible catalog options out of
@@ -148,11 +154,66 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
     navigate('/');
   };
 
+  const handleGenerate = async () => {
+    if (!generatorPrompt.trim()) return;
+    setGeneratorLoading(true);
+    setGeneratorError(null);
+    setGeneratorPreview(null);
+    try {
+      const result = await generateWorkflowFromPrompt(generatorPrompt.trim());
+      setGeneratorPreview(result);
+    } catch (err) {
+      setGeneratorError(err instanceof Error ? err.message : 'Something went wrong generating a workflow.');
+    } finally {
+      setGeneratorLoading(false);
+    }
+  };
+
+  // Turns the AI's proposed subtype ids/edges into real canvas nodes - it's never trusted blindly;
+  // whatever comes out of this is just placed on the board like anything a user adds manually, so
+  // the existing readiness checklist/issues immediately show if the AI got something wrong.
+  const handleApplyGenerated = () => {
+    if (!generatorPreview) return;
+    if (nodes.length > 0 && !window.confirm('This replaces everything currently on the canvas. Continue?')) return;
+
+    const newNodes: WorkflowNode[] = generatorPreview.nodes.map((n, index) => {
+      const subtype = getSubtype(n.subtypeId);
+      return {
+        id: `${subtype.id}-${crypto.randomUUID()}`,
+        type: 'flowNode',
+        position: { x: 160, y: 60 + index * 150 },
+        data: { label: subtype.label, kind: subtype.kind, subtypeId: subtype.id },
+      };
+    });
+    const newEdges: Edge[] = generatorPreview.edges
+      .filter((e) => newNodes[e.source] && newNodes[e.target])
+      .map((e) => ({
+        id: `e-${newNodes[e.source].id}-${newNodes[e.target].id}`,
+        source: newNodes[e.source].id,
+        target: newNodes[e.target].id,
+        type: 'deletable',
+      }));
+
+    setNodes(newNodes);
+    setEdges(newEdges);
+    setGeneratorPreview(null);
+    setGeneratorPrompt('');
+    setGeneratorOpen(false);
+  };
+
+  const handleDiscardGenerated = () => {
+    setGeneratorPreview(null);
+    setGeneratorError(null);
+  };
+
   return (
     <div className="page builder-page">
       <div className="page-header">
         <input className="workflow-name-input" value={name} onChange={(e) => setName(e.target.value)} />
         <div className="builder-actions">
+          <button className="btn" onClick={() => setGeneratorOpen((open) => !open)}>
+            ✨ Generate from prompt
+          </button>
           <button className="btn" onClick={() => navigate('/')}>
             Cancel
           </button>
@@ -169,6 +230,59 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
           </button>
         </div>
       </div>
+
+      {generatorOpen && (
+        <div className="generator-panel">
+          <strong>Generate a workflow from a prompt</strong>
+          <p className="generator-hint">
+            Describe what the workflow should do (e.g. "tag new uploads and rename them") and AI will propose nodes and
+            connections for you to review before anything is added to the canvas.
+          </p>
+          <textarea
+            className="generator-input"
+            rows={2}
+            placeholder="e.g. Every night, read assets from the SaaS Core pool, auto-tag them, then write them back out."
+            value={generatorPrompt}
+            onChange={(e) => setGeneratorPrompt(e.target.value)}
+            disabled={generatorLoading}
+          />
+          <div className="generator-actions">
+            <button className="btn btn-primary" onClick={handleGenerate} disabled={generatorLoading || !generatorPrompt.trim()}>
+              {generatorLoading ? 'Generating...' : 'Generate'}
+            </button>
+            <button className="btn" onClick={() => setGeneratorOpen(false)}>
+              Close
+            </button>
+          </div>
+          {generatorError && <div className="error-banner">{generatorError}</div>}
+          {generatorPreview && (
+            <div className="generator-preview">
+              <strong>Proposed workflow ({generatorPreview.nodes.length} node{generatorPreview.nodes.length === 1 ? '' : 's'}):</strong>
+              <ul>
+                {generatorPreview.nodes.map((n, index) => {
+                  const subtype = getSubtype(n.subtypeId);
+                  return (
+                    <li key={index}>
+                      <span className="generator-preview-kind" style={{ color: KIND_META[subtype.kind].color }}>
+                        {KIND_META[subtype.kind].label}
+                      </span>{' '}
+                      {subtype.label}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="generator-actions">
+                <button className="btn btn-primary" onClick={handleApplyGenerated}>
+                  Apply to canvas
+                </button>
+                <button className="btn" onClick={handleDiscardGenerated}>
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="readiness">
         <strong>Ready to enable?</strong>{' '}

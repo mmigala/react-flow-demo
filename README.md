@@ -102,6 +102,25 @@ nodes - shown as the final item in the fixed checklist ("All nodes are connected
 - The builder canvas lays workflows out **vertically** (Trigger at the top, Output at the bottom),
   not horizontally.
 
+### 7. AI workflow generator (optional, requires a Gemini API key)
+- A "✨ Generate from prompt" panel in the builder lets a user describe a workflow in plain
+  language (e.g. "tag new uploads and rename them") and get a proposed set of nodes/connections
+  back from Google's Gemini API (free tier), instead of building it by hand.
+- The proposal is never trusted blindly or applied automatically: it's shown as a preview list
+  first, and only added to the canvas after the user clicks "Apply to canvas" (which, if the
+  canvas isn't empty, asks for confirmation since it replaces the current contents).
+- Once applied, whatever the AI proposed is treated exactly like anything a user placed manually -
+  the existing readiness checklist/issues/notes immediately reflect whether it's actually valid,
+  with no separate validation logic needed for the AI path.
+- This calls the Gemini API directly from the browser (no backend/proxy), consistent with this
+  being a security-unconcerned POC. Requires a free API key from
+  [Google AI Studio](https://aistudio.google.com/apikey) set as `VITE_GEMINI_API_KEY` in a local
+  `.env` file (see `.env.example`) - the feature shows a clear inline error if the key is missing.
+- Uses `gemini-3.1-flash-lite` with "thinking" disabled (`thinkingConfig.thinkingBudget: 0`) -
+  this is a simple structured-extraction task, not something that benefits from a larger/reasoning
+  model, and the difference is dramatic: `gemini-3.5-flash` with thinking enabled took ~47s for
+  this same request, while `gemini-3.1-flash-lite` responds in a few seconds.
+
 ### Non-functional constraints
 - Minimal code - no unnecessary UI polish; this is a showcase of React Flow and the above logic, not
   a production app.
@@ -133,6 +152,8 @@ src/
     DeletableEdge.tsx        - custom edge with a delete button
     nodeCatalog.ts           - real subtype catalog + coexistence rules (mirrors NodeCompatibilityPolicy)
     nodeRules.ts             - ordering chain validation + structural rules (mirrors FlowStructureValidator)
+  ai/
+    generateWorkflow.ts      - calls the Gemini API to turn a prompt into proposed nodes/edges
 ```
 
 ## Getting started
@@ -141,3 +162,7 @@ npm install
 npm run dev      # start the dev server
 npm run build    # type-check + production build
 ```
+
+To use the "Generate from prompt" feature, copy `.env.example` to `.env`, set `VITE_GEMINI_API_KEY`
+to a free key from [Google AI Studio](https://aistudio.google.com/apikey), and restart the dev
+server. Without a key, the rest of the app works normally - only that one panel shows an error.
