@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ReactFlow,
@@ -46,12 +46,27 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(existing?.edges ?? []);
   const [errors, setErrors] = useState<string[]>([]);
   const [connecting, setConnecting] = useState<ConnectingHandle | null>(null);
+  const [infoOpenKind, setInfoOpenKind] = useState<NodeKind | null>(null);
+  const infoPopoverRef = useRef<HTMLDivElement | null>(null);
   const readiness = useMemo(() => getEnableReadiness(nodes, edges), [nodes, edges]);
   // Which subtype ids are currently allowed to be added next, mirroring
   // NodeCompatibilityPolicy.GetValidNextNodes - used to keep incompatible catalog options out of
   // the dropdowns (this rule is about co-existing anywhere in the flow, not connection order).
   const existingSubtypeIds = useMemo(() => nodes.map((n) => n.data.subtypeId), [nodes]);
   const validNextSubtypeIds = useMemo(() => getValidNextSubtypeIds(existingSubtypeIds), [existingSubtypeIds]);
+
+  // Close the "about this node type" popover when clicking anywhere outside it.
+  useEffect(() => {
+    if (!infoOpenKind) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (infoPopoverRef.current && !infoPopoverRef.current.contains(e.target as Node)) {
+        setInfoOpenKind(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [infoOpenKind]);
+
 
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {
@@ -254,6 +269,30 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
               <label className="palette-group-label" style={{ color: KIND_META[kind].color }}>
                 {KIND_META[kind].label}
               </label>
+              <button
+                type="button"
+                className="kind-info-btn"
+                aria-label={`About ${KIND_META[kind].label} node types`}
+                onClick={() => setInfoOpenKind((current) => (current === kind ? null : kind))}
+              >
+                ⓘ
+              </button>
+              {infoOpenKind === kind && (
+                <div className="kind-info-popover" ref={infoPopoverRef}>
+                  <strong>{KIND_META[kind].label} types</strong>
+                  <ul>
+                    {subtypesForKind(kind).map((subtype) => (
+                      <li key={subtype.id}>
+                        <div className="kind-info-item-label">{subtype.label}</div>
+                        <div className="kind-info-item-desc">{subtype.description}</div>
+                        <a className="kind-info-docs-link" href="#" onClick={(e) => e.preventDefault()}>
+                          Docs ↗
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <select
                 className="btn node-picker"
                 style={{ borderColor: KIND_META[kind].color }}

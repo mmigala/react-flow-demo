@@ -50,6 +50,11 @@ requirements are provided - see "Keeping this section up to date" below.
 - The palette scales to many subtypes per kind without cluttering the UI (one dropdown per kind,
   rather than one button per subtype).
 - Connections can be removed (a delete "×" appears directly on a connection line).
+- A small "ⓘ" button next to each kind's dropdown opens a popover listing every subtype of that
+  kind with a short description and a "Docs ↗" link, so users can learn what a subtype does
+  *before* placing it on the canvas (native `<select>` dropdowns can't show this kind of rich,
+  browsable content, so it lives in a separate popover instead). The docs link is a placeholder for
+  now and doesn't navigate anywhere.
 
 ### 4b. Structural validation (mirrors `FlowStructureValidator`, plus one POC-only rule)
 Enabling a workflow combines two layers. First, a **direct replica** of the real backend's structural

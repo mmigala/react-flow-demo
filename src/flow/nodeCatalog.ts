@@ -11,6 +11,8 @@ export interface NodeSubtype {
   id: string;
   kind: NodeKind;
   label: string;
+  /** Short, human-readable explanation of what this subtype does - shown in the pre-placement info popover. */
+  description: string;
   /** The other subtype ids this one is allowed to coexist with anywhere in the same flow. */
   allowedSubtypes: string[];
 }
@@ -22,6 +24,7 @@ export const NODE_CATALOG: NodeSubtype[] = [
     id: 'Scheduler',
     kind: 'trigger',
     label: 'Scheduler',
+    description: 'Starts the flow automatically on a recurring schedule (e.g. nightly), without needing a new asset to kick it off.',
     allowedSubtypes: [
       'SaasCorePoolInput',
       'Delete',
@@ -38,6 +41,7 @@ export const NODE_CATALOG: NodeSubtype[] = [
     id: 'ContainerGroupNewAssetUpload',
     kind: 'trigger',
     label: 'Container Group New Asset Upload',
+    description: 'Starts the flow automatically whenever a new asset is uploaded into a Container Group - acts as both the trigger and the input in one step.',
     allowedSubtypes: ['MetadataEdit', 'SaasCorePoolOutput', 'FileRenameAction', 'FileNameToMetadataExtractionAction'],
   },
 
@@ -46,6 +50,7 @@ export const NODE_CATALOG: NodeSubtype[] = [
     id: 'SaasCorePoolInput',
     kind: 'input',
     label: 'SaaS Core Pool Input',
+    description: 'Reads assets from a SaaS Core pool to use as the flow\'s internal input source.',
     allowedSubtypes: [
       'Scheduler',
       'Delete',
@@ -60,11 +65,12 @@ export const NODE_CATALOG: NodeSubtype[] = [
   },
 
   // Actions
-  { id: 'Delete', kind: 'action', label: 'Delete', allowedSubtypes: ['SaasCorePoolInput', 'Scheduler'] },
+  { id: 'Delete', kind: 'action', label: 'Delete', description: 'Deletes the asset(s) it receives. Since nothing can meaningfully happen afterwards, it can\'t be combined with most other actions.', allowedSubtypes: ['SaasCorePoolInput', 'Scheduler'] },
   {
     id: 'MetadataEdit',
     kind: 'action',
     label: 'Metadata Edit',
+    description: 'Adds, changes or removes metadata fields on the asset.',
     allowedSubtypes: [
       'SaasCorePoolInput',
       'ContainerGroupNewAssetUpload',
@@ -83,36 +89,42 @@ export const NODE_CATALOG: NodeSubtype[] = [
     id: 'AutoTaggingAction',
     kind: 'action',
     label: 'Auto Tagging',
+    description: 'Automatically analyzes the asset and applies descriptive tags (e.g. via image recognition), without any manual tagging.',
     allowedSubtypes: ['Scheduler', 'SaasCorePoolInput', 'FtpOutput', 'MetadataEdit', 'TranslationAction', 'SaasCorePoolOutput'],
   },
   {
     id: 'FileRenameAction',
     kind: 'action',
     label: 'File Rename',
+    description: 'Renames the asset\'s filename based on configured rules.',
     allowedSubtypes: ['ContainerGroupNewAssetUpload', 'SaasCorePoolOutput', 'MetadataEdit', 'FileNameToMetadataExtractionAction'],
   },
   {
     id: 'FileNameToMetadataExtractionAction',
     kind: 'action',
     label: 'File Name to Metadata Extraction',
+    description: 'Parses the filename and extracts parts of it into metadata fields.',
     allowedSubtypes: ['ContainerGroupNewAssetUpload', 'SaasCorePoolOutput', 'MetadataEdit', 'FileRenameAction'],
   },
   {
     id: 'ApiRequestAction',
     kind: 'action',
     label: 'API Request',
+    description: 'Calls an external API as part of the flow, e.g. to notify another system or fetch extra data.',
     allowedSubtypes: ['Scheduler', 'SaasCorePoolInput', 'MetadataEdit', 'TranslationAction', 'DynamicVariables', 'SaasCorePoolOutput'],
   },
   {
     id: 'DynamicVariables',
     kind: 'action',
     label: 'Dynamic Variables',
+    description: 'Computes reusable variables from the asset/context that later steps in the flow can reference.',
     allowedSubtypes: ['Scheduler', 'SaasCorePoolInput', 'MetadataEdit', 'TranslationAction', 'ApiRequestAction', 'SaasCorePoolOutput'],
   },
   {
     id: 'TranslationAction',
     kind: 'action',
     label: 'Translation',
+    description: 'Translates text metadata fields into other languages.',
     allowedSubtypes: [
       'SaasCorePoolInput',
       'SaasCorePoolOutput',
@@ -130,6 +142,7 @@ export const NODE_CATALOG: NodeSubtype[] = [
     id: 'SaasCorePoolOutput',
     kind: 'output',
     label: 'SaaS Core Pool Output',
+    description: 'Writes the resulting asset back into a SaaS Core pool.',
     allowedSubtypes: [
       'MetadataEdit',
       'TranslationAction',
@@ -147,6 +160,7 @@ export const NODE_CATALOG: NodeSubtype[] = [
     id: 'FtpOutput',
     kind: 'output',
     label: 'FTP Output',
+    description: 'Delivers the resulting asset to a remote location over FTP.',
     allowedSubtypes: ['MetadataEdit', 'TranslationAction', 'Scheduler', 'SaasCorePoolInput', 'AutoTaggingAction'],
   },
 ];
