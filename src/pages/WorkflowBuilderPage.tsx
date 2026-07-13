@@ -46,7 +46,7 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(existing?.edges ?? []);
   const [errors, setErrors] = useState<string[]>([]);
   const [connecting, setConnecting] = useState<ConnectingHandle | null>(null);
-  const readiness = useMemo(() => getEnableReadiness(nodes), [nodes]);
+  const readiness = useMemo(() => getEnableReadiness(nodes, edges), [nodes, edges]);
   // Which subtype ids are currently allowed to be added next, mirroring
   // NodeCompatibilityPolicy.GetValidNextNodes - used to keep incompatible catalog options out of
   // the dropdowns (this rule is about co-existing anywhere in the flow, not connection order).
@@ -156,36 +156,92 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
       </div>
 
       <div className="readiness">
-        <strong>Ready to enable?</strong> These are always required, plus a few situational rules that appear
-        below when they apply (e.g. an Output is only needed for certain kinds of input):
-        <ul>
-          {readiness.checks.map((check) => (
-            <li key={check.label} className={check.done ? 'check-ok' : 'check-missing'}>
-              {check.done ? '✓' : '✗'} {check.label}
-            </li>
-          ))}
-        </ul>
-        {readiness.issues.length > 0 && (
+        <strong>Ready to enable?</strong>{' '}
+        {nodes.length === 0 ? (
+          <>Add a Trigger, Input, Action or Output below to get started - we'll guide you through what's still needed as you go.</>
+        ) : (
           <>
-            <strong>Other issues to resolve:</strong>
+            These are always required, plus a few situational rules that appear below when they apply (e.g. an
+            Output is only needed for certain kinds of input):
             <ul>
-              {readiness.issues.map((issue) => (
-                <li key={issue.nodeId + issue.message} className="check-missing">
-                  ⚠ {issue.message}
+              {readiness.checks.map((check) => (
+                <li key={check.label} className={check.done ? 'check-ok' : 'check-missing'}>
+                  {check.done ? '✓' : '✗'} {check.label}
+                  {!check.done && check.suggestions && (
+                    <span className="suggestions">
+                      {check.suggestions.length > 0 ? (
+                        <>
+                          {' '}
+                          Try:{' '}
+                          {check.suggestions.map((subtype) => (
+                            <button key={subtype.id} className="suggestion-btn" onClick={() => addNode(subtype)}>
+                              + {subtype.label}
+                            </button>
+                          ))}
+                        </>
+                      ) : (
+                        ' - nothing on the board right now can satisfy this; remove a node to continue.'
+                      )}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
+            {readiness.issues.length > 0 && (
+              <>
+                <strong>Other issues to resolve:</strong>
+                <ul>
+                  {readiness.issues.map((issue) => (
+                    <li key={issue.nodeId + issue.message} className="check-missing">
+                      ⚠ {issue.message}
+                      {issue.suggestions && issue.suggestions.length > 0 && (
+                        <span className="suggestions">
+                          {' '}
+                          Try:{' '}
+                          {issue.suggestions.map((subtype) => (
+                            <button key={subtype.id} className="suggestion-btn" onClick={() => addNode(subtype)}>
+                              + {subtype.label}
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {readiness.notes.length > 0 && (
+              <ul>
+                {readiness.notes.map((note) => (
+                  <li key={note.message} className="check-note">
+                    💡 {note.message}
+                    {note.suggestions && note.suggestions.length > 0 && (
+                      <span className="suggestions">
+                        {' '}
+                        Try:{' '}
+                        {note.suggestions.map((subtype) => (
+                          <button key={subtype.id} className="suggestion-btn" onClick={() => addNode(subtype)}>
+                            + {subtype.label}
+                          </button>
+                        ))}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         )}
       </div>
 
       <div className="legend">
-        Canvas order: <strong>Trigger → Input → Action(s) → Output</strong>. Connections help you visualize the
-        flow but aren't required to enable it - only a Trigger and an Input are always required. Each node type can
-        only be used once, and some node types can't be combined with certain others - the dropdowns below grey out
-        anything that wouldn't work with what's already on the board. Double-click a node to rename it, drag from a
-        bottom (output) handle to a top (input) handle to connect - compatible targets light up green while you
-        drag - use a node's × button to delete it, and click the × on a connection line to disconnect it.
+        Canvas order: <strong>Trigger → Input → Action(s) → Output</strong>. All nodes must be connected together to
+        enable the workflow, in addition to a Trigger and an Input always being required. Trigger, Input and Output
+        can each only be used once, but you can add as many Actions as you like. Some node types can't be combined
+        with certain others - the dropdowns below grey out anything that wouldn't work with what's already on the
+        board. Double-click a node to rename it, drag from a bottom (output) handle to a top (input) handle to
+        connect - compatible targets light up green while you drag - use a node's × button to delete it, and click
+        the × on a connection line to disconnect it.
       </div>
 
       {/* A dropdown per kind keeps the toolbar at a fixed size no matter how many

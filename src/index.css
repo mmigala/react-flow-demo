@@ -137,6 +137,31 @@ body {
   color: #dc2626;
 }
 
+.readiness .check-note {
+  color: #6b7280;
+}
+
+.suggestions {
+  color: #1f2028;
+  font-weight: 400;
+}
+
+.suggestion-btn {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 8px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.suggestion-btn:hover {
+  background: #dbeafe;
+}
+
 /* Builder page */
 .builder-page {
   max-width: none;

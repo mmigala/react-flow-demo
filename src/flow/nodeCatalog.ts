@@ -177,3 +177,28 @@ export function getIncompatibleWith(subtypeId: string, otherSubtypeIds: string[]
   return otherSubtypeIds.filter((id) => id !== subtypeId && !subtype.allowedSubtypes.includes(id)).map((id) => getSubtype(id).label);
 }
 
+/**
+ * Which subtypes of a given kind would actually work given what's already on the board - i.e. the
+ * kind-filtered intersection of `getValidNextSubtypeIds`. This turns "you're missing a Trigger"
+ * into a concrete, actionable "add Scheduler" instead of leaving the user to guess which of the
+ * catalog's Trigger options would actually be accepted.
+ */
+export function getSuggestedSubtypesForKind(kind: NodeKind, currentSubtypeIds: string[]): NodeSubtype[] {
+  const validIds = new Set(getValidNextSubtypeIds(currentSubtypeIds));
+  return subtypesForKind(kind).filter((s) => validIds.has(s.id));
+}
+
+/**
+ * Which subtypes of a given kind could still be added right now, given what's already on the
+ * board - i.e. compatible with everything present AND not already used. Unlike
+ * getSuggestedSubtypesForKind (used when a requirement is still unmet), this is for kinds that
+ * already have at least one node and asks "is there room for more?" - e.g. Delete is incompatible
+ * with every other action, so once it's the only action present, nothing else can be added; Auto
+ * Tagging isn't, so other actions remain addable.
+ */
+export function getAddableSubtypesForKind(kind: NodeKind, currentSubtypeIds: string[]): NodeSubtype[] {
+  const validIds = new Set(getValidNextSubtypeIds(currentSubtypeIds));
+  return subtypesForKind(kind).filter((s) => validIds.has(s.id) && !currentSubtypeIds.includes(s.id));
+}
+
+

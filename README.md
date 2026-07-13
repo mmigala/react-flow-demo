@@ -24,8 +24,9 @@ requirements are provided - see "Keeping this section up to date" below.
   other connection order is allowed. **Note:** the real backend doesn't have this ordering concept
   yet, nor does it require nodes to be connected at all - it validates a flat set of subtypes (see
   `FlowStructureValidator.cs`). This layer is kept in the POC anyway as forward-looking behavior -
-  it's how flows are meant to visually work once the backend gains real ordering support - but it's
-  a canvas-only feature and does **not** gate whether a workflow can be enabled (see section 4b).
+  it's how flows are meant to visually work once the backend gains real ordering support - and,
+  unlike the backend, this product wants connectivity enforced today too: every node must be wired
+  together with the others to enable a workflow (see section 4b).
 - The UI must make this ordering obvious to the user (legend, live green/dim highlighting while
   dragging a connection).
 - Users can add and delete nodes freely.
@@ -50,11 +51,11 @@ requirements are provided - see "Keeping this section up to date" below.
   rather than one button per subtype).
 - Connections can be removed (a delete "×" appears directly on a connection line).
 
-### 4b. Structural validation (mirrors `FlowStructureValidator`)
-Enabling a workflow is a **direct replica** of the real backend's structural rules - it intentionally
-does **not** require nodes to be connected, nor an Action or Output unconditionally (e.g. Scheduler +
-SaaS Core Pool Input + Delete is a valid, enable-able flow with no Output node at all, exactly like
-the backend, since Output is only required when using an external input):
+### 4b. Structural validation (mirrors `FlowStructureValidator`, plus one POC-only rule)
+Enabling a workflow combines two layers. First, a **direct replica** of the real backend's structural
+rules - it doesn't require an Action or Output unconditionally (e.g. Scheduler + SaaS Core Pool
+Input + Delete satisfies these rules with no Output node at all, exactly like the backend, since
+Output is only required when using an external input):
 - A Trigger and an Input node are always required. **Container Group New Asset Upload** is a Trigger
   subtype that also counts as satisfying the Input requirement by itself (same dual role it has in
   the backend), since it's an all-in-one external-asset-upload entry point.
@@ -62,10 +63,25 @@ the backend, since Output is only required when using an external input):
 - Internal input (SaaS Core Pool Input) and external input (Container Group New Asset Upload)
   cannot be mixed in the same flow.
 - At least one Action or Output is required when using the internal input.
+
+Second, a deliberate **POC-only addition** the real backend doesn't have: every node placed on the
+canvas must also be connected (directly or transitively) to every other node - no isolated/orphaned
+nodes - shown as the final item in the fixed checklist ("All nodes are connected together").
+
 - All of the above, plus the duplicate-subtype and pairwise-compatibility checks from section 4,
   surface as a single, open-ended **issues list** in the "Ready to enable?" panel (in addition to
-  the fixed Trigger/Input checklist) - each entry names the exact problem, so adding new backend
-  rules later only ever adds rows to this list rather than requiring new UI.
+  the fixed Trigger/Input/connectivity checklist) - each entry names the exact problem, so adding
+  new backend rules later only ever adds rows to this list rather than requiring new UI.
+- Each unmet requirement is dynamically resolved into the *specific* node types that would satisfy
+  it given what's already on the board (not just "add a Trigger", but "add Scheduler" - or, if
+  something else already on the board rules it out, only the options that would actually work),
+  shown as one-click "+ add" buttons directly next to the requirement. This guides users toward a
+  working workflow instead of leaving them to guess and check via the dropdowns.
+- Action is the only kind that isn't limited to a single node. Once at least one Action is present,
+  a separate, non-blocking tip ("You can still add more actions") appears if - and only if - there's
+  a compatible Action subtype not yet on the board (e.g. it won't appear once the only action is
+  Delete, since Delete is incompatible with every other action; it will appear for something like
+  Auto Tagging, listing the specific compatible subtypes still addable).
 
 ### 5. Workflow status: Enabled / Disabled
 - Every workflow has a status: **Enabled** or **Disabled** (new workflows start Disabled).

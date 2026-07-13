@@ -78,7 +78,7 @@ export function setWorkflowStatus(id: string, status: WorkflowStatus): { ok: boo
   if (!workflow) return { ok: false, errors: ['Workflow not found.'] };
 
   if (status === 'enabled') {
-    const readiness = getEnableReadiness(workflow.nodes);
+    const readiness = getEnableReadiness(workflow.nodes, workflow.edges);
     if (!readiness.ready) {
       const missingChecks = readiness.checks.filter((c) => !c.done).map((c) => `Missing: ${c.label}`);
       const issueMessages = readiness.issues.map((issue) => issue.message);
