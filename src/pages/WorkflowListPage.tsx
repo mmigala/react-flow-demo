@@ -51,7 +51,7 @@ export function WorkflowListPage() {
             </tr>
           )}
           {workflows.map((w) => {
-            const readiness = getEnableReadiness(w.nodes, w.edges);
+            const readiness = getEnableReadiness(w.nodes);
             return (
               <tr key={w.id}>
                 <td>{w.name}</td>

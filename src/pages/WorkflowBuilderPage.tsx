@@ -16,8 +16,8 @@ import {
 import { getWorkflow, saveWorkflow } from '../storage';
 import { FlowNode } from '../flow/FlowNode';
 import { DeletableEdge } from '../flow/DeletableEdge';
-import { KIND_META, SINGLETON_KINDS, getChainTailType, getEnableReadiness, isConnectionAllowed } from '../flow/nodeRules';
-import { DATA_TYPE_COLORS, getSubtype, subtypesForKind, type NodeSubtype } from '../flow/nodeCatalog';
+import { KIND_META, SINGLETON_KINDS, getEnableReadiness, isConnectionAllowed } from '../flow/nodeRules';
+import { getIncompatibleWith, getSubtype, getValidNextSubtypeIds, subtypesForKind, type NodeSubtype } from '../flow/nodeCatalog';
 import type { NodeKind, WorkflowNode } from '../types';
 
 const nodeTypes = { flowNode: FlowNode };
@@ -46,10 +46,12 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(existing?.edges ?? []);
   const [errors, setErrors] = useState<string[]>([]);
   const [connecting, setConnecting] = useState<ConnectingHandle | null>(null);
-  const readiness = useMemo(() => getEnableReadiness(nodes, edges), [nodes, edges]);
-  // The data type the next Input/Action/Output must accept, based on whatever is already
-  // wired up on the board - used to keep incompatible catalog options out of the dropdowns.
-  const chainTailType = useMemo(() => getChainTailType(nodes, edges), [nodes, edges]);
+  const readiness = useMemo(() => getEnableReadiness(nodes), [nodes]);
+  // Which subtype ids are currently allowed to be added next, mirroring
+  // NodeCompatibilityPolicy.GetValidNextNodes - used to keep incompatible catalog options out of
+  // the dropdowns (this rule is about co-existing anywhere in the flow, not connection order).
+  const existingSubtypeIds = useMemo(() => nodes.map((n) => n.data.subtypeId), [nodes]);
+  const validNextSubtypeIds = useMemo(() => getValidNextSubtypeIds(existingSubtypeIds), [existingSubtypeIds]);
 
   const isValidConnection = useCallback(
     (connection: Connection | Edge) => {
@@ -72,7 +74,7 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
   );
 
   // While the user drags a new connection, highlight which other nodes it could
-  // legally attach to (matching data type + allowed order) so the correct target is obvious.
+  // legally attach to (matching the required kind order) so the correct target is obvious.
   const onConnectStart = useCallback((_: unknown, params: OnConnectStartParams) => {
     if (params.nodeId && params.handleType) {
       setConnecting({ nodeId: params.nodeId, handleType: params.handleType });
@@ -122,7 +124,9 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
       return;
     }
     if (!readiness.ready) {
-      setErrors(readiness.checks.filter((c) => !c.done).map((c) => `Missing: ${c.label}`));
+      const missingChecks = readiness.checks.filter((c) => !c.done).map((c) => `Missing: ${c.label}`);
+      const issueMessages = readiness.issues.map((issue) => issue.message);
+      setErrors([...missingChecks, ...issueMessages]);
       return;
     }
     saveWorkflow({ id: workflowId, name: name.trim(), status: 'enabled', nodes, edges, updatedAt: new Date().toISOString() });
@@ -152,7 +156,8 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
       </div>
 
       <div className="readiness">
-        <strong>Ready to enable?</strong> A workflow can only run once it has all of these:
+        <strong>Ready to enable?</strong> These are always required, plus a few situational rules that appear
+        below when they apply (e.g. an Output is only needed for certain kinds of input):
         <ul>
           {readiness.checks.map((check) => (
             <li key={check.label} className={check.done ? 'check-ok' : 'check-missing'}>
@@ -160,23 +165,27 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
             </li>
           ))}
         </ul>
+        {readiness.issues.length > 0 && (
+          <>
+            <strong>Other issues to resolve:</strong>
+            <ul>
+              {readiness.issues.map((issue) => (
+                <li key={issue.nodeId + issue.message} className="check-missing">
+                  ⚠ {issue.message}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
 
       <div className="legend">
-        Required order: <strong>Trigger → Input → Action(s) → Output</strong>. Trigger, Input and Output are required
-        exactly once each; Actions are optional and repeatable. Nodes only connect when their data types match too -
-        each node needs/gives one of the types below, like plugging matching cable shapes together - the dropdowns
-        below automatically grey out node types that wouldn't fit what's already on the board. Double-click a node to
-        rename it, drag from a bottom (output) handle to a top (input) handle to connect - compatible nodes light up
-        green while you drag - use a node's × button to delete it, and click the × on a connection line to disconnect
-        it.
-        <div className="type-legend">
-          {Object.entries(DATA_TYPE_COLORS).map(([type, color]) => (
-            <span key={type} className="type-chip" style={{ background: color }}>
-              {type}
-            </span>
-          ))}
-        </div>
+        Canvas order: <strong>Trigger → Input → Action(s) → Output</strong>. Connections help you visualize the
+        flow but aren't required to enable it - only a Trigger and an Input are always required. Each node type can
+        only be used once, and some node types can't be combined with certain others - the dropdowns below grey out
+        anything that wouldn't work with what's already on the board. Double-click a node to rename it, drag from a
+        bottom (output) handle to a top (input) handle to connect - compatible targets light up green while you
+        drag - use a node's × button to delete it, and click the × on a connection line to disconnect it.
       </div>
 
       {/* A dropdown per kind keeps the toolbar at a fixed size no matter how many
@@ -204,13 +213,18 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
                   + Add {KIND_META[kind].label}...
                 </option>
                 {subtypesForKind(kind).map((subtype) => {
-                  const incompatible = chainTailType !== undefined && subtype.accepts !== undefined && subtype.accepts !== chainTailType;
+                  const alreadyUsed = existingSubtypeIds.includes(subtype.id);
+                  const incompatible = !alreadyUsed && !validNextSubtypeIds.includes(subtype.id);
+                  const disabled = alreadyUsed || incompatible;
+                  const reason = alreadyUsed
+                    ? 'already added'
+                    : incompatible
+                      ? `incompatible with: ${getIncompatibleWith(subtype.id, existingSubtypeIds).join(', ')}`
+                      : '';
                   return (
-                    <option key={subtype.id} value={subtype.id} disabled={incompatible}>
+                    <option key={subtype.id} value={subtype.id} disabled={disabled}>
                       {subtype.label}
-                      {subtype.accepts ? ` (needs ${subtype.accepts})` : ''}
-                      {subtype.produces ? ` → gives ${subtype.produces}` : ''}
-                      {incompatible ? ` — board currently gives ${chainTailType}` : ''}
+                      {disabled ? ` — ${reason}` : ''}
                     </option>
                   );
                 })}

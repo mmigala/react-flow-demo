@@ -22,15 +22,15 @@ function seedAndPersist(): WorkflowDefinition[] {
   const seed: WorkflowDefinition[] = [
     {
       id: 'sample-1',
-      name: 'Order to payment',
+      name: 'Scheduled auto-tagging',
       status: 'disabled',
       updatedAt: new Date().toISOString(),
       nodes: [
-        { id: 'trigger-1', type: 'flowNode', position: { x: 0, y: 0 }, data: { label: 'Order Placed', kind: 'trigger', subtypeId: 'order-placed' } },
-        { id: 'input-1', type: 'flowNode', position: { x: 0, y: 150 }, data: { label: 'Load Order Details', kind: 'input', subtypeId: 'load-order' } },
-        { id: 'action-1', type: 'flowNode', position: { x: 0, y: 300 }, data: { label: 'Apply Discount', kind: 'action', subtypeId: 'apply-discount' } },
-        { id: 'action-2', type: 'flowNode', position: { x: 0, y: 450 }, data: { label: 'Charge Card', kind: 'action', subtypeId: 'charge-card' } },
-        { id: 'output-1', type: 'flowNode', position: { x: 0, y: 600 }, data: { label: 'Confirm Payment', kind: 'output', subtypeId: 'confirm-payment' } },
+        { id: 'trigger-1', type: 'flowNode', position: { x: 0, y: 0 }, data: { label: 'Scheduler', kind: 'trigger', subtypeId: 'Scheduler' } },
+        { id: 'input-1', type: 'flowNode', position: { x: 0, y: 150 }, data: { label: 'SaaS Core Pool Input', kind: 'input', subtypeId: 'SaasCorePoolInput' } },
+        { id: 'action-1', type: 'flowNode', position: { x: 0, y: 300 }, data: { label: 'Auto Tagging', kind: 'action', subtypeId: 'AutoTaggingAction' } },
+        { id: 'action-2', type: 'flowNode', position: { x: 0, y: 450 }, data: { label: 'Metadata Edit', kind: 'action', subtypeId: 'MetadataEdit' } },
+        { id: 'output-1', type: 'flowNode', position: { x: 0, y: 600 }, data: { label: 'SaaS Core Pool Output', kind: 'output', subtypeId: 'SaasCorePoolOutput' } },
       ],
       edges: [
         { id: 'e1', source: 'trigger-1', target: 'input-1' },
@@ -78,9 +78,11 @@ export function setWorkflowStatus(id: string, status: WorkflowStatus): { ok: boo
   if (!workflow) return { ok: false, errors: ['Workflow not found.'] };
 
   if (status === 'enabled') {
-    const readiness = getEnableReadiness(workflow.nodes, workflow.edges);
+    const readiness = getEnableReadiness(workflow.nodes);
     if (!readiness.ready) {
-      return { ok: false, errors: readiness.checks.filter((c) => !c.done).map((c) => `Missing: ${c.label}`) };
+      const missingChecks = readiness.checks.filter((c) => !c.done).map((c) => `Missing: ${c.label}`);
+      const issueMessages = readiness.issues.map((issue) => issue.message);
+      return { ok: false, errors: [...missingChecks, ...issueMessages] };
     }
   }
 

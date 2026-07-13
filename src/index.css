@@ -175,21 +175,6 @@ body {
   margin-bottom: 12px;
 }
 
-.type-legend {
-  margin-top: 6px;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.type-chip {
-  display: inline-block;
-  color: #fff;
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 999px;
-}
-
 .toolbar {
   display: flex;
   gap: 16px;
@@ -285,13 +270,6 @@ body {
 .flow-node-label {
   font-weight: 500;
   word-break: break-word;
-}
-
-.flow-node-types {
-  margin-top: 4px;
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
 }
 
 .flow-node-input {

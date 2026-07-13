@@ -18,31 +18,54 @@ requirements are provided - see "Keeping this section up to date" below.
 - A visual, node-based editor (React Flow canvas) for building a single workflow.
 
 ### 3. Node types and ordering rules
-- Four node kinds: **Trigger**, **Input**, **Action**, **Output**.
-- Trigger, Input and Output are required exactly once to save a workflow as *ready*; only Action
-  nodes may appear multiple times.
-- The only valid order is **Trigger → Input → Action(s) → Output**; no other connection order is
-  allowed.
-- The UI must make this ordering and the required node types obvious to the user (legend, a live
-  "ready to enable" checklist, and disabled/greyed-out options where a choice would be invalid).
+- Four node kinds: **Trigger**, **Input**, **Action**, **Output** (mirrors `NodeTypeId` in the real
+  Fotoware Flow backend: `Fotoware.Flow.Domain.Configuration.NodeType.cs`).
+- The only valid connection order on the canvas is **Trigger → Input → Action(s) → Output**; no
+  other connection order is allowed. **Note:** the real backend doesn't have this ordering concept
+  yet, nor does it require nodes to be connected at all - it validates a flat set of subtypes (see
+  `FlowStructureValidator.cs`). This layer is kept in the POC anyway as forward-looking behavior -
+  it's how flows are meant to visually work once the backend gains real ordering support - but it's
+  a canvas-only feature and does **not** gate whether a workflow can be enabled (see section 4b).
+- The UI must make this ordering obvious to the user (legend, live green/dim highlighting while
+  dragging a connection).
 - Users can add and delete nodes freely.
 - Each node can be renamed (double-click a node to edit its label inline).
 
-### 4. Typed node subtypes (data-type compatibility)
-- Beyond the four kinds, each kind has multiple concrete **subtypes** (e.g. Trigger: "Order Placed",
-  "Payment Received"; Input: "Load Order Details", "Load Customer Profile"; etc.), modeled on a
-  simple real-world example: an e-commerce order-processing flow.
-- Each subtype declares the data type it **needs** (accepts) and/or **gives** (produces) - e.g.
-  `Order`, `Customer`, `Payment`, `Notification`.
-- Two nodes may only be connected if, in addition to satisfying the kind ordering, the upstream
-  node's produced data type matches the downstream node's required data type (like matching plug
-  shapes).
-- Users must not be able to pick a node subtype that is incompatible with what's already on the
-  board - incompatible options are greyed out in the add-node pickers, not just rejected after the
-  fact.
+### 4. Real node subtypes and their compatibility rules
+- Node subtypes and names are taken directly from the real backend's catalog (`NodeSubTypeId` in
+  `Fotoware.Flow.Domain.Configuration.NodeSubType.cs`), e.g. Triggers: *Scheduler*, *Container Group
+  New Asset Upload*; Input: *SaaS Core Pool Input*; Actions: *Delete*, *Metadata Edit*, *Auto
+  Tagging*, *File Rename*, *File Name to Metadata Extraction*, *API Request*, *Dynamic Variables*,
+  *Translation*; Outputs: *SaaS Core Pool Output*, *FTP Output*.
+- Compatibility between subtypes mirrors `NodeCompatibilityPolicy.cs` - **not** a producer/consumer
+  data-type model. Each subtype declares which other subtypes it may coexist with **anywhere in the
+  same flow**; a candidate subtype is valid to add only if it's compatible with *every* subtype
+  already present (`GetValidNextNodes`), independent of how (or whether) nodes are connected.
+- Duplicate subtypes are never allowed - the same subtype cannot appear twice in one flow (mirrors
+  `FlowStructureValidator`'s duplicate check).
+- The add-node dropdowns grey out any subtype that's already used or incompatible with what's
+  currently on the board, with the reason shown in the option text - this is the backend's own
+  stated purpose for `GetValidNextNodes` ("determine which nodes are valid to add next").
 - The palette scales to many subtypes per kind without cluttering the UI (one dropdown per kind,
   rather than one button per subtype).
 - Connections can be removed (a delete "×" appears directly on a connection line).
+
+### 4b. Structural validation (mirrors `FlowStructureValidator`)
+Enabling a workflow is a **direct replica** of the real backend's structural rules - it intentionally
+does **not** require nodes to be connected, nor an Action or Output unconditionally (e.g. Scheduler +
+SaaS Core Pool Input + Delete is a valid, enable-able flow with no Output node at all, exactly like
+the backend, since Output is only required when using an external input):
+- A Trigger and an Input node are always required. **Container Group New Asset Upload** is a Trigger
+  subtype that also counts as satisfying the Input requirement by itself (same dual role it has in
+  the backend), since it's an all-in-one external-asset-upload entry point.
+- An Output is required only when using that external input (Container Group New Asset Upload).
+- Internal input (SaaS Core Pool Input) and external input (Container Group New Asset Upload)
+  cannot be mixed in the same flow.
+- At least one Action or Output is required when using the internal input.
+- All of the above, plus the duplicate-subtype and pairwise-compatibility checks from section 4,
+  surface as a single, open-ended **issues list** in the "Ready to enable?" panel (in addition to
+  the fixed Trigger/Input checklist) - each entry names the exact problem, so adding new backend
+  rules later only ever adds rows to this list rather than requiring new UI.
 
 ### 5. Workflow status: Enabled / Disabled
 - Every workflow has a status: **Enabled** or **Disabled** (new workflows start Disabled).
@@ -85,10 +108,10 @@ src/
     WorkflowListPage.tsx    - the CRUD list page
     WorkflowBuilderPage.tsx - the React Flow builder page
   flow/
-    FlowNode.tsx            - custom node renderer (rename, delete, type badges/handles)
+    FlowNode.tsx            - custom node renderer (rename, delete)
     DeletableEdge.tsx        - custom edge with a delete button
-    nodeCatalog.ts           - node subtype catalog (kinds, data types, needs/gives)
-    nodeRules.ts             - ordering/compatibility rules, validation, readiness checklist
+    nodeCatalog.ts           - real subtype catalog + coexistence rules (mirrors NodeCompatibilityPolicy)
+    nodeRules.ts             - ordering chain validation + structural rules (mirrors FlowStructureValidator)
 ```
 
 ## Getting started

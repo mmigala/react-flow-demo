@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import { KIND_META } from './nodeRules';
-import { DATA_TYPE_COLORS, getSubtype } from './nodeCatalog';
 import type { WorkflowNode } from '../types';
 
 export function FlowNode({ id, data, selected }: NodeProps<WorkflowNode>) {
@@ -9,7 +8,6 @@ export function FlowNode({ id, data, selected }: NodeProps<WorkflowNode>) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(data.label);
   const meta = KIND_META[data.kind];
-  const subtype = getSubtype(data.subtypeId);
 
   const commitRename = () => {
     const nextLabel = draft.trim() || data.label;
@@ -24,14 +22,7 @@ export function FlowNode({ id, data, selected }: NodeProps<WorkflowNode>) {
       onDoubleClick={() => setEditing(true)}
       title="Double-click to rename"
     >
-      {subtype.accepts && (
-        <Handle
-          type="target"
-          position={Position.Top}
-          style={{ background: DATA_TYPE_COLORS[subtype.accepts] }}
-          title={`Needs: ${subtype.accepts}`}
-        />
-      )}
+      {data.kind !== 'trigger' && <Handle type="target" position={Position.Top} />}
 
       <div className="flow-node-badge" style={{ background: meta.color }}>
         {meta.label}
@@ -56,19 +47,6 @@ export function FlowNode({ id, data, selected }: NodeProps<WorkflowNode>) {
         <div className="flow-node-label">{data.label}</div>
       )}
 
-      <div className="flow-node-types">
-        {subtype.accepts && (
-          <span className="type-chip" style={{ background: DATA_TYPE_COLORS[subtype.accepts] }}>
-            needs {subtype.accepts}
-          </span>
-        )}
-        {subtype.produces && (
-          <span className="type-chip" style={{ background: DATA_TYPE_COLORS[subtype.produces] }}>
-            gives {subtype.produces}
-          </span>
-        )}
-      </div>
-
       <button
         className="flow-node-delete"
         title="Delete node"
@@ -77,14 +55,7 @@ export function FlowNode({ id, data, selected }: NodeProps<WorkflowNode>) {
         ×
       </button>
 
-      {subtype.produces && (
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          style={{ background: DATA_TYPE_COLORS[subtype.produces] }}
-          title={`Produces: ${subtype.produces}`}
-        />
-      )}
+      {data.kind !== 'output' && <Handle type="source" position={Position.Bottom} />}
     </div>
   );
 }

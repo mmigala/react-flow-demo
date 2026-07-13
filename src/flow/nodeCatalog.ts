@@ -1,47 +1,154 @@
 import type { NodeKind } from '../types';
 
 /**
- * The "plug shape" each node socket speaks. A connection is only allowed when
- * the upstream node's `produces` type matches the downstream node's `accepts` type
- * (in addition to respecting the Trigger -> Input -> Action(s) -> Output kind order).
+ * Mirrors the real Fotoware Flow backend's node catalog (see
+ * Fotoware.Flow.Domain.Configuration.NodeSubTypeId / NodeCompatibilityPolicy). Unlike the earlier
+ * invented example, compatibility here is NOT "producer/consumer data types flowing through a pipe" -
+ * it's whichever *set* of subtypes the backend allows to coexist in the same flow at all, checked
+ * across the whole board, exactly like NodeCompatibilityPolicy.GetValidNextNodes.
  */
-export type DataType = 'Order' | 'Customer' | 'Payment' | 'Notification';
-
-export const DATA_TYPE_COLORS: Record<DataType, string> = {
-  Order: '#f59e0b',
-  Customer: '#0891b2',
-  Payment: '#7c3aed',
-  Notification: '#db2777',
-};
-
 export interface NodeSubtype {
   id: string;
   kind: NodeKind;
   label: string;
-  /** Data type this node needs from the upstream node. Absent for triggers (they start the chain). */
-  accepts?: DataType;
-  /** Data type this node hands to the downstream node. Absent for outputs (they terminate the chain). */
-  produces?: DataType;
+  /** The other subtype ids this one is allowed to coexist with anywhere in the same flow. */
+  allowedSubtypes: string[];
 }
 
-// A simple, realistic example: an e-commerce order-processing workflow.
-// Two sensible chains it supports:
-//   Order Placed -> Load Order Details -> Apply Discount -> Charge Card -> Confirm Payment
-//   Order Placed -> Load Customer Profile -> Send Email -> Log Notification
+// Copied directly from Fotoware.Flow.Domain.Configuration.NodeCompatibilityPolicy.AllNodesDefinitions.
 export const NODE_CATALOG: NodeSubtype[] = [
-  { id: 'order-placed', kind: 'trigger', label: 'Order Placed', produces: 'Order' },
-  { id: 'payment-received', kind: 'trigger', label: 'Payment Received', produces: 'Payment' },
+  // Triggers
+  {
+    id: 'Scheduler',
+    kind: 'trigger',
+    label: 'Scheduler',
+    allowedSubtypes: [
+      'SaasCorePoolInput',
+      'Delete',
+      'MetadataEdit',
+      'TranslationAction',
+      'FtpOutput',
+      'AutoTaggingAction',
+      'ApiRequestAction',
+      'DynamicVariables',
+      'SaasCorePoolOutput',
+    ],
+  },
+  {
+    id: 'ContainerGroupNewAssetUpload',
+    kind: 'trigger',
+    label: 'Container Group New Asset Upload',
+    allowedSubtypes: ['MetadataEdit', 'SaasCorePoolOutput', 'FileRenameAction', 'FileNameToMetadataExtractionAction'],
+  },
 
-  { id: 'load-order', kind: 'input', label: 'Load Order Details', accepts: 'Order', produces: 'Order' },
-  { id: 'load-customer', kind: 'input', label: 'Load Customer Profile', accepts: 'Order', produces: 'Customer' },
+  // Inputs
+  {
+    id: 'SaasCorePoolInput',
+    kind: 'input',
+    label: 'SaaS Core Pool Input',
+    allowedSubtypes: [
+      'Scheduler',
+      'Delete',
+      'MetadataEdit',
+      'TranslationAction',
+      'FtpOutput',
+      'AutoTaggingAction',
+      'ApiRequestAction',
+      'DynamicVariables',
+      'SaasCorePoolOutput',
+    ],
+  },
 
-  { id: 'apply-discount', kind: 'action', label: 'Apply Discount', accepts: 'Order', produces: 'Order' },
-  { id: 'charge-card', kind: 'action', label: 'Charge Card', accepts: 'Order', produces: 'Payment' },
-  { id: 'send-email', kind: 'action', label: 'Send Email', accepts: 'Customer', produces: 'Notification' },
+  // Actions
+  { id: 'Delete', kind: 'action', label: 'Delete', allowedSubtypes: ['SaasCorePoolInput', 'Scheduler'] },
+  {
+    id: 'MetadataEdit',
+    kind: 'action',
+    label: 'Metadata Edit',
+    allowedSubtypes: [
+      'SaasCorePoolInput',
+      'ContainerGroupNewAssetUpload',
+      'SaasCorePoolOutput',
+      'Scheduler',
+      'FtpOutput',
+      'FileRenameAction',
+      'FileNameToMetadataExtractionAction',
+      'ApiRequestAction',
+      'DynamicVariables',
+      'AutoTaggingAction',
+      'TranslationAction',
+    ],
+  },
+  {
+    id: 'AutoTaggingAction',
+    kind: 'action',
+    label: 'Auto Tagging',
+    allowedSubtypes: ['Scheduler', 'SaasCorePoolInput', 'FtpOutput', 'MetadataEdit', 'TranslationAction', 'SaasCorePoolOutput'],
+  },
+  {
+    id: 'FileRenameAction',
+    kind: 'action',
+    label: 'File Rename',
+    allowedSubtypes: ['ContainerGroupNewAssetUpload', 'SaasCorePoolOutput', 'MetadataEdit', 'FileNameToMetadataExtractionAction'],
+  },
+  {
+    id: 'FileNameToMetadataExtractionAction',
+    kind: 'action',
+    label: 'File Name to Metadata Extraction',
+    allowedSubtypes: ['ContainerGroupNewAssetUpload', 'SaasCorePoolOutput', 'MetadataEdit', 'FileRenameAction'],
+  },
+  {
+    id: 'ApiRequestAction',
+    kind: 'action',
+    label: 'API Request',
+    allowedSubtypes: ['Scheduler', 'SaasCorePoolInput', 'MetadataEdit', 'TranslationAction', 'DynamicVariables', 'SaasCorePoolOutput'],
+  },
+  {
+    id: 'DynamicVariables',
+    kind: 'action',
+    label: 'Dynamic Variables',
+    allowedSubtypes: ['Scheduler', 'SaasCorePoolInput', 'MetadataEdit', 'TranslationAction', 'ApiRequestAction', 'SaasCorePoolOutput'],
+  },
+  {
+    id: 'TranslationAction',
+    kind: 'action',
+    label: 'Translation',
+    allowedSubtypes: [
+      'SaasCorePoolInput',
+      'SaasCorePoolOutput',
+      'Scheduler',
+      'FtpOutput',
+      'ApiRequestAction',
+      'DynamicVariables',
+      'AutoTaggingAction',
+      'MetadataEdit',
+    ],
+  },
 
-  { id: 'update-order-status', kind: 'output', label: 'Update Order Status', accepts: 'Order' },
-  { id: 'confirm-payment', kind: 'output', label: 'Confirm Payment', accepts: 'Payment' },
-  { id: 'log-notification', kind: 'output', label: 'Log Notification', accepts: 'Notification' },
+  // Outputs
+  {
+    id: 'SaasCorePoolOutput',
+    kind: 'output',
+    label: 'SaaS Core Pool Output',
+    allowedSubtypes: [
+      'MetadataEdit',
+      'TranslationAction',
+      'ContainerGroupNewAssetUpload',
+      'FileRenameAction',
+      'FileNameToMetadataExtractionAction',
+      'Scheduler',
+      'SaasCorePoolInput',
+      'AutoTaggingAction',
+      'ApiRequestAction',
+      'DynamicVariables',
+    ],
+  },
+  {
+    id: 'FtpOutput',
+    kind: 'output',
+    label: 'FTP Output',
+    allowedSubtypes: ['MetadataEdit', 'TranslationAction', 'Scheduler', 'SaasCorePoolInput', 'AutoTaggingAction'],
+  },
 ];
 
 export function getSubtype(subtypeId: string): NodeSubtype {
@@ -53,3 +160,20 @@ export function getSubtype(subtypeId: string): NodeSubtype {
 export function subtypesForKind(kind: NodeKind): NodeSubtype[] {
   return NODE_CATALOG.filter((s) => s.kind === kind);
 }
+
+/**
+ * Mirrors NodeCompatibilityPolicy.GetValidNextNodes: given the subtype ids already present in a
+ * flow, returns every subtype id that's allowed to coexist with ALL of them. An empty input means
+ * nothing to be incompatible with yet, so every subtype is a valid candidate.
+ */
+export function getValidNextSubtypeIds(currentSubtypeIds: string[]): string[] {
+  if (currentSubtypeIds.length === 0) return NODE_CATALOG.map((s) => s.id);
+  return NODE_CATALOG.filter((def) => currentSubtypeIds.every((id) => def.allowedSubtypes.includes(id))).map((def) => def.id);
+}
+
+/** Which of the given other subtype ids this subtype is NOT allowed to coexist with (by label), for messaging. */
+export function getIncompatibleWith(subtypeId: string, otherSubtypeIds: string[]): string[] {
+  const subtype = getSubtype(subtypeId);
+  return otherSubtypeIds.filter((id) => id !== subtypeId && !subtype.allowedSubtypes.includes(id)).map((id) => getSubtype(id).label);
+}
+
