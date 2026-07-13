@@ -17,7 +17,7 @@ import { getWorkflow, saveWorkflow } from '../storage';
 import { FlowNode } from '../flow/FlowNode';
 import { DeletableEdge } from '../flow/DeletableEdge';
 import { KIND_META, SINGLETON_KINDS, isConnectionAllowed, validateWorkflow } from '../flow/nodeRules';
-import { DATA_TYPE_COLORS, subtypesForKind, type NodeSubtype } from '../flow/nodeCatalog';
+import { DATA_TYPE_COLORS, getSubtype, subtypesForKind, type NodeSubtype } from '../flow/nodeCatalog';
 import type { NodeKind, WorkflowNode } from '../types';
 
 const nodeTypes = { flowNode: FlowNode };
@@ -138,28 +138,38 @@ function BuilderInner({ workflowId }: { workflowId: string }) {
         </div>
       </div>
 
+      {/* A dropdown per kind keeps the toolbar at a fixed size no matter how many
+          node subtypes get added to the catalog over time. */}
       <div className="toolbar">
         {ALL_KINDS.map((kind) => {
           const kindDisabled = SINGLETON_KINDS.includes(kind) && nodes.some((n) => n.data.kind === kind);
           return (
             <div key={kind} className="palette-group">
-              <span className="palette-group-label" style={{ color: KIND_META[kind].color }}>
+              <label className="palette-group-label" style={{ color: KIND_META[kind].color }}>
                 {KIND_META[kind].label}
-              </span>
-              {subtypesForKind(kind).map((subtype) => (
-                <button
-                  key={subtype.id}
-                  className="btn"
-                  style={{ borderColor: KIND_META[kind].color }}
-                  disabled={kindDisabled}
-                  title={[subtype.accepts && `Needs: ${subtype.accepts}`, subtype.produces && `Gives: ${subtype.produces}`]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  onClick={() => addNode(subtype)}
-                >
-                  + {subtype.label}
-                </button>
-              ))}
+              </label>
+              <select
+                className="btn node-picker"
+                style={{ borderColor: KIND_META[kind].color }}
+                disabled={kindDisabled}
+                value=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  addNode(getSubtype(e.target.value));
+                  e.target.value = '';
+                }}
+              >
+                <option value="" disabled>
+                  + Add {KIND_META[kind].label}...
+                </option>
+                {subtypesForKind(kind).map((subtype) => (
+                  <option key={subtype.id} value={subtype.id}>
+                    {subtype.label}
+                    {subtype.accepts ? ` (needs ${subtype.accepts})` : ''}
+                    {subtype.produces ? ` → gives ${subtype.produces}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
           );
         })}
